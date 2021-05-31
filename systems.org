@@ -1,0 +1,442 @@
+#+title:    systems
+#+author:   anntnzrb
+#+property: header-args :mkdirp yes
+
+* table of contents                                            :toc:noexport:
+- [[#channels][channels]]
+- [[#systems][systems]]
+  - [[#base-system][base system]]
+  - [[#asus-gl502vmk-laptop][ASUS GL502VMK (laptop)]]
+- [[#installation-media][installation media]]
+- [[#attributions][attributions]]
+
+* channels
+
+[[http://guix.gnu.org/en/manual/en/guix.html#Channels][channels]] are basically repositories that can be added; this is useful for
+packages that are not officialy by Guix. as an example, i add the
+[[https://gitlab.com/nonguix/nonguix][nonguix]] repo in order to get the non-free Linux kernel for some of my systems.
+
+- ~./guix/channels.scm~
+
+#+begin_src scheme :tangle "./guix/channels.scm"
+(cons*
+ (channel
+  ;; nonguix (non-free) packages; because of hardware
+  (name 'nonguix)
+  (url "https://gitlab.com/nonguix/nonguix")
+  ;; enable signature verification:
+  (introduction
+   (make-channel-introduction
+    "897c1a470da759236cc11798f4e0a5f7d4d59fbc"
+    (openpgp-fingerprint
+     "2A39 3FFF 68F4 EF7A 3D29  12AF 6F51 20A0 22FB B2D5"))))
+
+ ;; preserve original channels
+ %default-channels)
+#+end_src
+
+* systems
+
+systems i maintain.
+
+** base system
+
+this is a generic configuration which holds all settings (and configurations)
+shared across all my systems.
+
+| *Kernel* | [[https://www.fsfla.org/ikiwiki/selibre/linux-libre/][GNU Linux-libre]] |
+
+- ~./systems/base-sys.scm~
+
+#+begin_src scheme :tangle "./systems/base-sys.scm" :noweb yes
+(define-module (systems base-sys)
+  #:use-module (gnu)
+  #:use-module (gnu services audio)
+  #:use-module (gnu services desktop)
+  #:use-module (gnu services networking)
+  #:use-module (gnu services sound)
+  #:use-module (gnu services ssh)
+  #:use-module (gnu services xorg))
+
+;; ----------------------------------------------------------------------------
+;; globals
+;; ----------------------------------------------------------------------------
+
+(define base/user-name "annt") ;; user name for all devices
+
+;; ext4 mount options
+(define base/ext4-options "commit=60")
+
+(define-public base-os
+  (operating-system
+   ;; -------------------------------------------------------------------------
+   ;; system
+   ;; -------------------------------------------------------------------------
+
+   (host-name "null")
+   (locale "en_US.utf8")
+   (timezone "America/Guayaquil")
+
+   ;; standard US keyboard layout with extra accent keys
+   ;; CAPS-LOCK key remapped to ESCAPE
+   (keyboard-layout
+    (keyboard-layout "us" "altgr-intl" #:options '("caps:escape")))
+
+   ;; -------------------------------------------------------------------------
+   ;; users
+   ;; -------------------------------------------------------------------------
+
+   (users
+    (cons*
+     (user-account
+      (name base/user-name)
+      (home-directory (string-append "/home/" base/user-name))
+      (group "users")
+      (supplementary-groups '("wheel" "netdev" "audio" "video"))
+      ;; initial password
+      (password (crypt "root" "$6$abc")))
+     %base-user-accounts))
+
+   ;; -------------------------------------------------------------------------
+   ;; bootloader
+   ;; -------------------------------------------------------------------------
+
+   (bootloader
+    (bootloader-configuration
+     (bootloader grub-efi-bootloader)
+     (target "/boot/efi")
+     (timeout 10)
+     (keyboard-layout keyboard-layout)))
+
+   ;; -------------------------------------------------------------------------
+   ;; filesystems
+   ;; -------------------------------------------------------------------------
+   ;; file-systems declaration is mandatory; this gets overwritten anyways
+
+   (file-systems
+    (append
+     (list
+      ;; boot/efi
+      (file-system
+       (device (file-system-label "GUIX-BOOT"))
+       (mount-point "/boot/efi")
+       (type "vfat"))
+
+      ;; root
+      (file-system
+       (device (file-system-label "GUIX-ROOT"))
+       (mount-point "/")
+       (type "ext4")
+       (flags '(no-atime))
+       (options base/ext4-options)))
+     %base-file-systems))
+
+   ;; swap partition
+   (swap-devices (list (file-system-label "GUIX-SWAP")))
+
+   ;; --------------------------------------------------------------------------
+   ;; packages
+   ;; --------------------------------------------------------------------------
+
+   (packages
+    (append
+     (map specification->package
+          '(
+            <<base-pkgs>>
+            ))
+     %base-packages))
+
+   ;; -------------------------------------------------------------------------
+   ;; services
+   ;; -------------------------------------------------------------------------
+
+   (services
+    (cons*
+     ;; Xorg
+     (set-xorg-configuration
+      (xorg-configuration
+       (keyboard-layout keyboard-layout)))
+     %desktop-services))))
+#+end_src
+
+
+*** packages
+
+list of packages divided into categories, the following do not belong anywhere
+specific, should be consider as essentials packages.
+
+#+begin_src scheme :noweb-ref "base-pkgs"
+;; essentials
+"curl"
+"git"
+"gnupg"
+"make"
+
+;; extras
+"cowsay"
+"figlet"
+"fortune-mod"
+
+;; apps
+"dmenu"
+"pcmanfm"
+"redshift"
+;; "gimp"
+
+;; tools
+"atool"
+"feh"
+"htop"
+"imagemagick"
+"maim"
+"mpv"
+"neofetch"
+"python-screenkey"
+"speedtest-cli"
+"tree"
+"unzip"
+"youtube-dl"
+"zip"
+
+;; misc
+"nss-certs"
+#+end_src
+
+**** editors
+
+/Emacs/ packages should be handled by /Emacs/ itself for now, using
+/Guix packages/ makes it less reproducible across systems.
+
+#+begin_src scheme :noweb-ref "base-pkgs"
+"emacs@27.2"
+"vim"
+#+end_src
+
+**** fonts
+
+#+begin_src scheme :noweb-ref "base-pkgs"
+"font-adobe-source-han-sans"
+"font-fantasque-sans"
+"font-fira-code"
+"font-ubuntu"
+"fontconfig"
+#+end_src
+
+**** audio
+
+packages related to audio & sound
+
+#+begin_src scheme :noweb-ref "base-pkgs"
+"pamixer"
+"pulsemixer"
+#+end_src
+
+**** X11
+
+#+begin_src scheme :noweb-ref "base-pkgs"
+"picom"
+"setxkbmap"
+"unclutter"
+"xbacklight"
+"xclip"
+"xdotool"
+"xkill"
+"xprop"
+"xrandr"
+"xrdb"
+"xset"
+#+end_src
+
+***** (window manager)-related
+
+#+begin_src scheme :noweb-ref "base-pkgs"
+;; window manager
+"awesome"
+
+;; keybinds
+"sxhkd"
+#+end_src
+
+**** applications
+
+***** terminal/shell
+
+#+begin_src scheme :noweb-ref "base-pkgs"
+"alacritty"
+"xterm"
+#+end_src
+
+***** document-related
+
+#+begin_src scheme :noweb-ref "base-pkgs"
+"zathura"
+"zathura-pdf-mupdf"
+;; "libreoffice"
+#+end_src
+
+***** web
+
+#+begin_src scheme :noweb-ref "base-pkgs"
+;; browsers
+"qutebrowser"
+"ungoogled-chromium"
+
+;; browser extensions
+;;; (ungoogled-)Chromium
+"ublock-origin-chromium"
+#+end_src
+
+** ASUS GL502VMK (laptop)
+
+| *Model*      | Asus Strix GL502VMK            |
+| *CPU*        | Intel Core i7-7700HQ           |
+| *GPU*        | NVIDIA GeForce GTX 1060 Mobile |
+| *Memory*     | 12 GB                          |
+| *Display*    | 15.6"                          |
+| *Storage*    | 1 TB HDD                       |
+| *Battery*    | 4100 mAh                       |
+| *Weight*     | 2.2 kg                         |
+| *Resolution* | 1920x1080                      |
+
+*** Guix configuration
+
+| *Kernel* | [[https://www.kernel.org/][Generic Linux]] |
+
+this system won't work properly without the generic Linux kernel.
+
+- ~./systems/asus.scm~
+
+#+begin_src scheme :tangle "./systems/asus.scm" :noweb yes
+(define-module (systems asus)
+  #:use-module (systems base-sys)
+  #:use-module (gnu)
+  #:use-module (gnu system file-systems)
+  #:use-module (nongnu packages linux)
+  #:use-module (nongnu system linux-initrd))
+
+;; ---------------------------------------------------------------------------
+;; globals
+;; ----------------------------------------------------------------------------
+
+(define me/screen-resolution "1920x1080")
+
+;;; ASUS GL502VMK
+(operating-system
+ (inherit base-os)
+
+ ;; -------------------------------------------------------------------------
+ ;; system
+ ;; -------------------------------------------------------------------------
+
+ (host-name "sus502vmk")
+
+ ;; -------------------------------------------------------------------------
+ ;; kernel
+ ;; -------------------------------------------------------------------------
+
+ ;; non-free kernel because of my hardware
+ (kernel linux)
+ (initrd microcode-initrd)
+ (firmware (list linux-firmware))
+
+ ;; -------------------------------------------------------------------------
+ ;; filesystems
+ ;; -------------------------------------------------------------------------
+
+ (file-systems
+  (append
+   ;; use filesystems declared by parent system
+   (operating-system-file-systems base-os)))
+
+ ;; bootloader
+ (bootloader
+  (bootloader-configuration
+   (bootloader grub-efi-bootloader)
+   (target "/boot/efi")
+   (keyboard-layout (operating-system-keyboard-layout base-os))
+   (theme
+    (grub-theme
+     (inherit (grub-theme))
+     (gfxmode (list me/screen-resolution))))))
+
+ ;; -------------------------------------------------------------------------
+ ;; packages
+ ;; -------------------------------------------------------------------------
+
+ (packages
+  (append
+   (map specification->package
+        '(
+          <<asus-pkgs>>
+          ))
+   (operating-system-packages base-os))))
+#+end_src
+
+*** packages
+
+list of packages specifically for this system
+
+#+begin_src scheme :noweb-ref "asus-pkgs"
+;; FIXME :: GPU
+"xclip"
+#+end_src
+
+* installation media
+
+instead of using the official =.iso=, it is possible to create a custom one
+with the generic Linux kernel in order to use WiFI
+(among other non-functioning-out-of-the-box components)
+
+- ~./guix/install.scm~
+
+#+begin_src scheme :tangle "./guix/install.scm"
+(define-module (nongnu system install)
+  #:use-module (gnu system)
+  #:use-module (gnu system install)
+  #:use-module (gnu packages)
+  #:use-module (nongnu packages linux)
+  #:use-module (nongnu system linux-initrd)
+  #:export (installation-os-nonfree))
+
+(define installation-os-nonfree
+  (operating-system
+   (inherit installation-os)
+
+   ;; kernel
+   (kernel linux)
+   (firmware (list linux-firmware))
+   (initrd microcode-initrd)        ;; CPU Microcode
+
+   ;; 'net.ifnames' argument reduces network interface names verbosity.
+   ;; this can cause an issue with wpa_supplicant when you try to connect to a
+   ;; wifi network.
+   (kernel-arguments '("quiet" "net.ifnames=0"))
+
+   ;; Add extra useful packages for the installation process
+   (packages (append
+              (map specification->package+output
+                   '(
+                     ;; tools
+                     "htop" "git" "gnupg" "make" "iwd" "nss-certs"
+
+                     ;; editors
+                     "emacs-no-x" "vim"))
+              %base-packages
+              (operating-system-packages installation-os)))))
+
+;; return the OS
+installation-os-nonfree
+#+end_src
+
+* attributions
+
+people who have helped me with on my GNU Guix journey:
+
+- [[https://github.com/abcdw][Andrew Tropin]]
+  - [[https://github.com/abcdw/rde][Reproducible Development Environment (RDE)]]
+- [[https://github.com/daviwil][David Wilson]]
+- [[https://github.com/tauoverpi/dotfiles][tauoverpi's dotfiles]]
+- @ [[http://guix.gnu.org/en/contact/irc/][#guix]]
+  - ~roptat~
+  - ~nckx~
+  - ~lfam~
