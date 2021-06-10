@@ -3,5 +3,7 @@
 
 # ... except for:
 !.gitignore
+!README
+!COPYING
 !Makefile
 !*.org

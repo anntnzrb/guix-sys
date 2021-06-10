@@ -9,6 +9,7 @@
   - [[#asus-gl502vmk-laptop][ASUS GL502VMK (laptop)]]
 - [[#installation-media][installation media]]
 - [[#attributions][attributions]]
+- [[#copying][copying]]
 
 * channels
 
@@ -440,3 +441,10 @@ people who have helped me with on my GNU Guix journey:
   - ~roptat~
   - ~nckx~
   - ~lfam~
+
+* copying
+
+refer to the [[file:COPYING][COPYING]] file for licensing information.
+
+unless otherwise noted, all code herein is distributed under the terms of the
+[[https://www.gnu.org/licenses/gpl-3.0.en.html][GNU General Public License Version 3 or later]].
